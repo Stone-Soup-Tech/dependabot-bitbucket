@@ -111,7 +111,7 @@ jobs:
 
       - name: Build and push
         if: steps.release.outputs.should_publish == 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: sdk/Dockerfile
