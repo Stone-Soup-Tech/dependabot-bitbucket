@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 
-import dependabot
+from sdk import dependabot
 
 JOBS = ({"manager": "gradle", "directory": "/android", "group": "android"},
         {"manager": "pub", "directory": "/", "group": "flutter"})
@@ -41,7 +41,7 @@ class DependabotTests(unittest.TestCase):
         client = self.make_client()
         body = json.dumps({"error": {"message": "Invalid pagelen; secret-token"}}).encode()
         error = HTTPError("https://api.bitbucket.org/2.0/test", 400, "Bad Request", {}, io.BytesIO(body))
-        with patch("dependabot.urlopen", side_effect=error):
+        with patch("sdk.dependabot.urlopen", side_effect=error):
             with self.assertRaises(RuntimeError) as caught:
                 client.request("test")
         self.assertIn("HTTP 400 — Invalid pagelen; [REDACTED]", str(caught.exception))
@@ -51,7 +51,7 @@ class DependabotTests(unittest.TestCase):
         client = self.make_client()
         error = HTTPError("https://api.bitbucket.org/2.0/test", 502, "Bad Gateway", {},
                           io.BytesIO(b"<html>Bad gateway</html>"))
-        with patch("dependabot.urlopen", side_effect=error):
+        with patch("sdk.dependabot.urlopen", side_effect=error):
             with self.assertRaisesRegex(RuntimeError, "HTTP 502"):
                 client.request("test")
 
@@ -70,7 +70,7 @@ class DependabotTests(unittest.TestCase):
                 return subprocess.CompletedProcess(arguments, returncode)
 
             with patch.dict("os.environ", {"BITBUCKET_DOCKER_HOST_INTERNAL": "docker"}), \
-                    patch("dependabot.subprocess.run", side_effect=execute):
+                    patch("sdk.dependabot.subprocess.run", side_effect=execute):
                 return dependabot.run_updates(directory, client, "base", configuration, Path("cli"))
 
     def test_android_source_and_group(self):
@@ -117,10 +117,10 @@ class DependabotTests(unittest.TestCase):
             client = Mock()
             client.branch.return_value = "base"
             update = {"dependencies": []}
-            with self.subTest(manager=manager), patch("dependabot.Bitbucket", return_value=client), \
-                    patch("dependabot.signal.signal"), \
-                    patch("dependabot.run_updates", return_value=update) as run, \
-                    patch("dependabot.publish_update") as publish:
+            with self.subTest(manager=manager), patch("sdk.dependabot.Bitbucket", return_value=client), \
+                    patch("sdk.dependabot.signal.signal"), \
+                    patch("sdk.dependabot.run_updates", return_value=update) as run, \
+                    patch("sdk.dependabot.publish_update") as publish:
                 dependabot.main(["--manager", manager, "--directory", "/", "--group", "test"])
                 self.assertEqual(run.call_count, 1)
                 self.assertEqual(run.call_args.args[3]["manager"], manager)
@@ -143,7 +143,7 @@ class DependabotTests(unittest.TestCase):
     def test_dry_run_never_writes(self):
         client = Mock(base_branch="dev")
         client.pull_requests.return_value = []
-        with patch("dependabot.git") as git:
+        with patch("sdk.dependabot.git") as git:
             dependabot.publish_update(Path("unused"), client,
                 {"dependencies": [{"name": "example", "version": "2"}]},
                 "base", True, JOBS[1])
@@ -170,7 +170,7 @@ class DependabotTests(unittest.TestCase):
 
     def test_api_rejects_external_pagination_and_redirects(self):
         client = self.make_client()
-        with patch("dependabot.urlopen") as request:
+        with patch("sdk.dependabot.urlopen") as request:
             with self.assertRaises(ValueError):
                 client.request("https://example.test/steal")
             request.assert_not_called()
@@ -204,7 +204,7 @@ class DependabotTests(unittest.TestCase):
         client = Mock(base_branch="dev")
         client.pull_requests.return_value = [{"state": "DECLINED", "description":
             f"<!-- dependabot-update:{fingerprint} -->"}]
-        with patch("dependabot.git") as git:
+        with patch("sdk.dependabot.git") as git:
             dependabot.publish_update(Path("unused"), client, update, "base", False, JOBS[1])
             git.assert_not_called()
         client.request.assert_not_called()
@@ -248,7 +248,7 @@ class DependabotTests(unittest.TestCase):
                             return "new-tree" if unchanged else "old-tree"
                         return ""
 
-                    with patch("dependabot.git", side_effect=git_result) as git:
+                    with patch("sdk.dependabot.git", side_effect=git_result) as git:
                         dependabot.publish_update(Path(temporary), client, update, "base", False, JOBS[0])
                     pushes = [call for call in git.call_args_list if call.args[1] == "push"]
                     self.assertEqual(len(pushes), 0 if unchanged else 1)
@@ -260,7 +260,7 @@ class DependabotTests(unittest.TestCase):
     def test_base_race_prevents_push_and_pr(self):
         client = Mock(base_branch="dev", repository="workspace/repository", token="secret")
         client.pull_requests.return_value = []
-        with tempfile.TemporaryDirectory() as temporary, patch("dependabot.git", return_value="new-base") as git:
+        with tempfile.TemporaryDirectory() as temporary, patch("sdk.dependabot.git", return_value="new-base") as git:
             with self.assertRaisesRegex(RuntimeError, "Base branch changed"):
                 dependabot.publish_update(Path(temporary), client,
                     {"dependencies": []}, "old-base", False, JOBS[0])
@@ -276,7 +276,7 @@ class DependabotTests(unittest.TestCase):
             paths.append(directory)
             raise RuntimeError("updater failure")
 
-        with patch("dependabot.Bitbucket", return_value=client), patch("dependabot.run_updates", side_effect=fail):
+        with patch("sdk.dependabot.Bitbucket", return_value=client), patch("sdk.dependabot.run_updates", side_effect=fail):
             with self.assertRaisesRegex(RuntimeError, "updater failure"):
                 dependabot.main(["--manager", "pub", "--directory", "/", "--group", "flutter"])
         self.assertFalse(paths[0].exists())

@@ -28,7 +28,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Run runner and release tooling tests
-        run: python3 -B -m unittest discover -p 'test_*.py'
+        run: python3 -B -m unittest discover -s test -p 'test_*.py'
 
       - name: Validate proposed image before opening PR
         run: docker build -f sdk/Dockerfile -t dependabot-bitbucket:update .
@@ -70,7 +70,7 @@ jobs:
 #         with:
 #           python-version: '3.13'
 #       - run: python3 scripts/cli_release.py --update
-#       - run: python3 -B -m unittest discover -p 'test_*.py'
+#       - run: python3 -B -m unittest discover -s test -p 'test_*.py'
 #       - name: Validate proposed image before opening PR
 #         run: docker build -f sdk/Dockerfile -t dependabot-bitbucket:update .
 #       - uses: peter-evans/create-pull-request@v7

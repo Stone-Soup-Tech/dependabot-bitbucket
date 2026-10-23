@@ -76,6 +76,10 @@ At `size: 1x`, 3072 MB goes to Docker and the remaining 1024 MB to the build con
 
 CI runs offline tests, builds the image with release verification, and smoke-tests its shell and tools. The publishing workflow repeats required validation before publishing on `main` or manual dispatch. It publishes `ghcr.io/stone-soup-tech/dependabot-bitbucket:1.0.0` and a moving `:latest` tag; it refuses to overwrite an existing version tag. Every runner/build change intended for publication must increment `image_version`, even if the CLI is unchanged. `latest` points to the most recently published release; consumers can pin an immutable version instead. Registry administrators must also avoid manually overwriting/deleting version tags; use digests when strict immutability is required.
 
+For manual publication, select **Actions → Publish Dependabot image → Run workflow** on `main`. The `increase-type` input defaults to `NONE`: publish the current `image_version`, or skip successfully if its image already exists. Choose `patch`, `minor` or `major` to increase the version before publishing. The `auto-increase` boolean defaults to `true`, carrying patch and minor at 10 (`1.0.9` → `1.1.0`; `1.9.9` → `2.0.0` for patch). Disable it for standard version increments (`1.0.9` → `1.0.10` for patch). Minor and major increases reset lower components. `NONE` leaves the version unchanged regardless of `auto-increase`. Automatic push runs use `NONE`.
+
+Explicit increases are committed and pushed to `versions.yml` using `GITHUB_TOKEN` before image publication. Repository branch rules must allow this push; the workflow does not bypass protections. Stale runs fail if `main` has advanced. If publication fails after the version commit, rerun with `NONE` to retry that version. The workflow's own token push does not trigger a second push workflow.
+
 For rollback, change the consumer image to a previously validated immutable version, such as `:1.0.0`, or `ghcr.io/stone-soup-tech/dependabot-bitbucket@sha256:<published-digest>`. The `latest` tag follows newly published releases, including major versions. Publication is restricted to `main`. For rollback, pin the consumer rather than moving `latest` backwards.
 
 The daily `check_dependabot_versions.yml` checks **Dependabot CLI releases**, not Renovate. It verifies the latest stable Linux AMD64 archive against the upstream asset digest, updates both version and checksum, increments the runner patch version, tests/builds, and opens an update PR. The normal publishing workflow runs after merge. Breaking runner changes require a manual major-version bump; upstream CLI changes should still be reviewed for compatibility.
@@ -102,7 +106,7 @@ This wrapper does not implement Renovate's full PR lifecycle, rate accounting or
 ## Development and troubleshooting
 
 ```sh
-python3 -B -m unittest discover -p 'test_*.py'
+python3 -B -m unittest discover -s test -p 'test_*.py'
 docker build -f sdk/Dockerfile -t dependabot-bitbucket:test .
 docker run --rm dependabot-bitbucket:test sh -ec 'git --version; docker --version; dependabot --version; dependabot-bitbucket --help'
 ```

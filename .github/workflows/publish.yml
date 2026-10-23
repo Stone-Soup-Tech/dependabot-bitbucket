@@ -3,13 +3,26 @@ on:
   push:
     branches: [main]
     paths:
-      - dependabot.py
       - sdk/**
       - scripts/**
       - versions.yml
       - .github/workflows/ci.yml
       - .github/workflows/publish.yml
   workflow_dispatch:
+    inputs:
+      increase-type:
+        type: choice
+        description: Version increase (MAJOR.MINOR.PATCH); NONE releases the current version
+        options:
+          - patch
+          - minor
+          - major
+          - NONE
+        default: NONE
+      auto-increase:
+        type: boolean
+        description: Carry patch and minor at 10 (1.0.9 becomes 1.1.0; 1.9.9 becomes 2.0.0)
+        default: true
 
 permissions:
   contents: read
@@ -26,16 +39,26 @@ jobs:
     needs: checks
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - uses: actions/checkout@v7
 
-      - name: Read image version and repository
-        id: image
+      - name: Check release commit
         run: |
-          version=$(python3 -c 'import json; print(json.load(open("versions.yml"))["image_version"])')
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          git fetch origin main
+          if [[ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ]]; then
+            echo '::error::main has advanced. Run publishing again on its latest commit.'
+            exit 1
+          fi
+
+      - name: Prepare image version and repository
+        id: image
+        env:
+          INCREASE_TYPE: ${{ inputs.increase-type || 'NONE' }}
+          AUTO_INCREASE: ${{ github.event_name != 'workflow_dispatch' || inputs.auto-increase }}
+        run: |
+          version=$(python3 scripts/image_version.py "$INCREASE_TYPE" --auto-increase "$AUTO_INCREASE")
           image="ghcr.io/stone-soup-tech/dependabot-bitbucket"
           echo "name=$image" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -65,11 +88,33 @@ jobs:
           fi
           echo "should_publish=true" >> "$GITHUB_OUTPUT"
 
+      - name: Save increased image version
+        if: steps.release.outputs.should_publish == 'true'
+        id: source
+        env:
+          INCREASE_TYPE: ${{ inputs.increase-type || 'NONE' }}
+          VERSION: ${{ steps.image.outputs.version }}
+        run: |
+          if [[ "$INCREASE_TYPE" != 'NONE' ]]; then
+            git fetch origin main
+            if [[ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ]]; then
+              echo '::error::main changed while preparing the release. Run publishing again.'
+              exit 1
+            fi
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add versions.yml
+            git commit -m "chore: bump image version to $VERSION"
+            git push origin HEAD:refs/heads/main
+          fi
+          echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
         if: steps.release.outputs.should_publish == 'true'
         uses: docker/build-push-action@v6
         with:
-          context: sdk
+          context: .
+          file: sdk/Dockerfile
           platforms: linux/amd64
           push: true
           tags: |
@@ -77,4 +122,4 @@ jobs:
             ${{ steps.image.outputs.name }}:latest
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.revision=${{ steps.source.outputs.revision }}
