@@ -1,8 +1,6 @@
 # Docker image for Dependabot on Bitbucket
 
-[![Publish Dependabot image](https://github.com/Stone-Soup-Tech/dependabot-bitbucket/actions/workflows/publish.yml/badge.svg)](https://github.com/Stone-Soup-Tech/dependabot-bitbucket/actions/workflows/publish.yml)
-
-[![GHCR version](https://ghcr-badge.egpl.dev/Stone-Soup-Tech/dependabot-bitbucket/latest_tag?trim=major&label=latest)](https://ghcr.io/stone-soup-tech/dependabot-bitbucket)
+[![Publish Dependabot image](https://github.com/Stone-Soup-Tech/dependabot-bitbucket/actions/workflows/publish.yml/badge.svg)](https://github.com/Stone-Soup-Tech/dependabot-bitbucket/actions/workflows/publish.yml) [![GHCR version](https://ghcr-badge.egpl.dev/Stone-Soup-Tech/dependabot-bitbucket/latest_tag?trim=major&label=latest)](https://ghcr.io/stone-soup-tech/dependabot-bitbucket)
 
 Run grouped Gradle and Pub dependency updates using a shared Bitbucket Pipelines step image. Python, Git, Docker client and a verified pinned Dependabot CLI are installed at image build time. Consumers use inline command arguments; no copied scripts, Bitbucket Pipe or hosted server is required.
 
