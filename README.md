@@ -108,7 +108,7 @@ docker run --rm dependabot-bitbucket:test sh -ec 'git --version; docker --versio
 
 Callback connection errors: confirm Runtime v3, the named Docker service, the internal host variable and port 8080. Docker becoming unreachable: inspect service memory and preceding updater logs. Authentication failures: distinguish Git fetch from REST PR/reviewer API failures; REST email and Git username are different. `Bitbucket::NotFound` in updater metadata lookups does not establish that Git proxy authentication failed. HTTP 200/advisory lookups alone do not establish an update error. Check the final job events and exit status.
 
-Release verification failures: check the upstream release asset metadata and network access; do not disable digest/attestation verification. An immutable-tag publication failure means the image version needs a bump, or registry lookup failed and publication was safely stopped.
+Release verification failures: check the upstream release asset metadata and network access; do not disable digest/attestation verification. If the immutable version tag already exists, publication succeeds with a skip notice and leaves all tags unchanged. This checks tag existence, not image content equality. Increment `image_version` to publish new changes. Registry lookup errors still fail the workflow rather than risk overwriting a release.
 
 References: [Dependabot CLI](https://github.com/dependabot/cli), [callback host/API URL explanation](https://github.com/dependabot/cli/issues/377), [Runtime v3](https://support.atlassian.com/bitbucket-cloud/docs/enable-and-use-runtime-v3/), [Docker service memory](https://support.atlassian.com/bitbucket-cloud/kb/pipeline-build-failed-with-container-docker-exceeded-memory-limit-error/).
 
