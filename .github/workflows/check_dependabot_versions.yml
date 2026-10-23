@@ -1,0 +1,42 @@
+name: Check Dependabot CLI releases
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      # A GitHub App token allows the resulting PR to trigger required CI.
+      - uses: actions/create-github-app-token@v1
+        id: app
+        with:
+          app-id: ${{ vars.UPDATE_APP_ID }}
+          private-key: ${{ secrets.UPDATE_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app.outputs.token }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python3 scripts/cli_release.py --update
+      - run: python3 -B -m unittest discover -p 'test_*.py'
+      - name: Validate proposed image before opening PR
+        run: docker build -f sdk/Dockerfile -t dependabot-bitbucket:update .
+      - uses: peter-evans/create-pull-request@v7
+        id: pr
+        with:
+          token: ${{ steps.app.outputs.token }}
+          branch: chore/update-dependabot-cli
+          add-paths: versions.yml
+          commit-message: 'chore: update verified Dependabot CLI pin'
+          title: 'chore: update verified Dependabot CLI pin'
+          body: 'Updates the upstream CLI version, verified archive SHA256 and runner image patch version. Required CI must pass before merge and publication.'
+      - name: Enable auto-merge when configured
+        if: steps.pr.outputs.pull-request-number && vars.UPDATE_AUTO_MERGE == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.pull-request-number }}
+        run: gh pr merge "$PR_NUMBER" --auto --squash

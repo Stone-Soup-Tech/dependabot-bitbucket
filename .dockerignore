@@ -1,0 +1,7 @@
+*
+!sdk/
+!sdk/Dockerfile
+!scripts/
+!scripts/cli_release.py
+!versions.yml
+!dependabot.py

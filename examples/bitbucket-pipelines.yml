@@ -1,0 +1,47 @@
+# Merge these definitions/custom pipeline into your existing pipeline.
+# Use this image after its first validated publication.
+definitions:
+  services:
+    dependabot-docker:
+      type: docker
+      memory: 3072
+pipelines:
+  custom:
+    dependabot:
+      - variables:
+          - name: DEPENDABOT_DRY_RUN
+            default: 'false'
+            allowed-values: ['false', 'true']
+      - parallel:
+          fail-fast: false
+          steps:
+            - step: &dependabot-step
+                name: Update Android dependencies
+                image: ghcr.io/stone-soup-tech/dependabot-bitbucket:latest
+                size: 1x
+                max-time: 30
+                concurrency-group: dependabot-gradle
+                runtime:
+                  cloud:
+                    version: 3
+                services:
+                  - dependabot-docker
+                script:
+                  - dependabot-bitbucket --manager gradle --directory /android --group android --base-branch main
+            - step:
+                <<: *dependabot-step
+                name: Update Flutter dependencies
+                concurrency-group: dependabot-pub
+                script:
+                  - dependabot-bitbucket --manager pub --directory / --group flutter --base-branch main
+      - step:
+          name: Update Bitbucket pipeline dependencies
+          image: renovate/renovate:44.151.2
+          concurrency-group: dependabot-pipelines
+          services:
+            - docker
+          script:
+            - export RENOVATE_CONFIG_FILE="$BITBUCKET_CLONE_DIR/renovate.js"
+            - export RENOVATE_FORCE='{"enabledManagers":["bitbucket-pipelines"]}'
+            - if [ "$DEPENDABOT_DRY_RUN" = "true" ]; then export RENOVATE_DRY_RUN=full; fi
+            - renovate

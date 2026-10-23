@@ -1,0 +1,22 @@
+name: Validate runner and image
+on:
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Runner and release tooling tests
+        run: python3 -B -m unittest discover -p 'test_*.py'
+      - name: Build image (verifies upstream release and pinned checksum)
+        run: docker build -f sdk/Dockerfile -t dependabot-bitbucket:test .
+      - name: Validate shell, tools and runner
+        run: |
+          docker run --rm dependabot-bitbucket:test sh -ec 'python3 --version; git --version; docker --version; dependabot --version; dependabot-bitbucket --help'
