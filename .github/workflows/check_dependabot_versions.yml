@@ -15,7 +15,7 @@ jobs:
         with:
           app-id: ${{ vars.UPDATE_APP_ID }}
           private-key: ${{ secrets.UPDATE_APP_PRIVATE_KEY }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           token: ${{ steps.app.outputs.token }}
       - uses: actions/setup-python@v5
