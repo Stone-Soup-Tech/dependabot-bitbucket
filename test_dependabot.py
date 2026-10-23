@@ -18,8 +18,8 @@ JOBS = ({"manager": "gradle", "directory": "/android", "group": "android"},
 class DependabotTests(unittest.TestCase):
     def make_client(self):
         with patch.dict("os.environ", {"BITBUCKET_REPO_FULL_NAME": "workspace/repository",
-                                      "RENOVATE_USERNAME": "bot@example.com",
-                                      "RENOVATE_API_TOKEN": "secret-token"}):
+                                      "BOT_USERNAME": "bot@example.com",
+                                      "BOT_API_TOKEN": "secret-token"}):
             return dependabot.Bitbucket("dev")
 
     def test_pr_query_uses_supported_page_size_and_follows_pagination(self):

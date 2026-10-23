@@ -33,7 +33,7 @@ def urlopen(request, timeout):
 
 
 class Bitbucket:
-    """Access Bitbucket with the same account and API token used by Renovate."""
+    """Access Bitbucket with the configured bot account and API token."""
 
     def __init__(self, base_branch="main", reviewers=None):
         self.base_branch = base_branch
@@ -41,8 +41,9 @@ class Bitbucket:
         self.repository = os.environ["BITBUCKET_REPO_FULL_NAME"]
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", self.repository):
             raise ValueError("Invalid BITBUCKET_REPO_FULL_NAME")
-        self.username = os.environ["RENOVATE_USERNAME"]
-        self.token = os.environ["RENOVATE_API_TOKEN"]
+
+        self.username = os.environ["BOT_USERNAME"]
+        self.token = os.environ["BOT_API_TOKEN"]
         self.authorization = "Basic " + base64.b64encode(
             f"{self.username}:{self.token}".encode()
         ).decode()
@@ -53,12 +54,14 @@ class Bitbucket:
         url = path if path.startswith("https://") else API_ROOT + path
         if urlparse(url).netloc != "api.bitbucket.org":
             raise ValueError("Unexpected Bitbucket API host")
+
         body = json.dumps(data).encode() if data is not None else None
         request = Request(url, data=body, method=method, headers={
             "Authorization": self.authorization,
             "Content-Type": "application/json",
             "Accept": "application/json",
         })
+
         try:
             with urlopen(request, timeout=60) as response:
                 return json.load(response)
@@ -72,6 +75,7 @@ class Bitbucket:
                 pass
             finally:
                 error.close()
+
             if isinstance(detail, str) and detail:
                 for secret in (self.token, self.authorization,
                                os.environ.get("DEPENDABOT_READ_TOKEN")):
@@ -156,25 +160,30 @@ def run_updates(directory, client, base_sha, configuration, executable):
                 "version-update:semver-patch"]}
             for name in configuration.get("ignore", [])
         ]
+
     input_file = directory / "job.json"
     input_file.write_text(json.dumps(job))
+
     environment = os.environ.copy()
     environment["DEPENDABOT_READ_USERNAME"] = os.environ.get(
         "DEPENDABOT_READ_USERNAME", GIT_API_TOKEN_USERNAME)
     environment["DEPENDABOT_READ_TOKEN"] = os.environ.get(
         "DEPENDABOT_READ_TOKEN", client.token)
+
     # The proxy lives in the Docker service; route callbacks to the build container.
     docker_host = os.environ["BITBUCKET_DOCKER_HOST_INTERNAL"]
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", docker_host):
         raise ValueError("Invalid BITBUCKET_DOCKER_HOST_INTERNAL")
     environment["FAKE_API_HOST"] = "0.0.0.0"
     environment["FAKE_API_PORT"] = "8080"
+
     output_file = directory / "events.jsonl"
     with output_file.open("w") as output:
         result = subprocess.run([
             str(executable), "update", "-f", str(input_file), "--timeout", "45m",
             "--api-url", f"http://{docker_host}:8080",
         ], env=environment, stdout=output, check=False)
+
     events = [json.loads(line) for line in output_file.read_text().splitlines() if line]
     errors = [event["data"].get("error-type", event["type"]) for event in events
               if event["type"] in ("record_update_job_error", "record_update_job_unknown_error")]
@@ -189,6 +198,7 @@ def run_updates(directory, client, base_sha, configuration, executable):
         )
     if not any(event["type"] == "mark_as_processed" for event in events):
         raise RuntimeError("Dependabot did not finish processing the job")
+
     updates = [event["data"] for event in events if event["type"] == "create_pull_request"]
     if len(updates) > 1:
         raise RuntimeError("Expected a single grouped update; refusing to publish partial updates")
@@ -202,6 +212,7 @@ def apply_files(directory, files):
     for file in files:
         if file.get("support_file"):
             continue
+
         relative = PurePosixPath(file["directory"].lstrip("/")) / file["name"]
         if relative.is_absolute() or ".." in relative.parts or any(part.lower() == ".git" for part in relative.parts):
             raise ValueError("Unsafe dependency file path")
@@ -213,6 +224,7 @@ def apply_files(directory, files):
             raise ValueError("Dependency file escapes the checkout")
         if file.get("symlink_target"):
             raise ValueError("Symlink dependency updates are unsupported")
+
         if file.get("deleted") or file.get("operation") == "delete":
             target.unlink(missing_ok=True)
         else:
@@ -240,6 +252,7 @@ def publish_update(directory, client, update, base_sha, dry_run, configuration):
         for dependency in update["dependencies"]
     )).encode()).hexdigest()
     marker = f"<!-- dependabot-update:{fingerprint} -->"
+
     pull_requests = client.pull_requests(update_branch)
     opened = [pr for pr in pull_requests if pr["state"] == "OPEN"]
     if len(opened) > 1:
@@ -247,12 +260,14 @@ def publish_update(directory, client, update, base_sha, dry_run, configuration):
     if not opened and any(marker in (pr.get("description") or "") for pr in pull_requests):
         print("This update was declined; skipping until dependency versions change.")
         return
+
     title = update.get("pr-title") or f"Update {configuration['group']} dependencies"
     description = (update.get("pr-body") or title) + "\n\n" + marker
     print(title)
     if dry_run:
         print("Dry run: no branches or pull requests changed.")
         return
+
     reviewers = client.reviewers() if not opened else None
     previous_sha = client.branch(update_branch)
     checkout = directory / "repository"
@@ -269,17 +284,20 @@ def publish_update(directory, client, update, base_sha, dry_run, configuration):
         "GIT_AUTHOR_EMAIL": "dependabot@users.noreply.github.com",
         "GIT_COMMITTER_EMAIL": "dependabot@users.noreply.github.com",
     })
+
     git(checkout, "init", "--quiet")
     git(checkout, "remote", "add", "origin", f"https://bitbucket.org/{client.repository}.git")
     git(checkout, "fetch", "--depth=1", "origin", client.base_branch, env=environment)
     if git(checkout, "rev-parse", "FETCH_HEAD") != base_sha:
         raise RuntimeError("Base branch changed during the update; rerun the pipeline")
     git(checkout, "checkout", "--detach", base_sha)
+
     apply_files(checkout, update["updated-dependency-files"])
     git(checkout, "add", "--all")
     if not git(checkout, "diff", "--cached", "--name-only"):
         print("No file changes to publish.")
         return
+
     tree = git(checkout, "write-tree")
     unchanged = False
     if previous_sha:
@@ -287,11 +305,13 @@ def publish_update(directory, client, update, base_sha, dry_run, configuration):
         if git(checkout, "rev-parse", "FETCH_HEAD") != previous_sha:
             raise RuntimeError("Dependabot branch changed during the update; rerun the pipeline")
         unchanged = tree == git(checkout, "rev-parse", f"{previous_sha}^{{tree}}")
+
     if not unchanged:
         git(checkout, "commit", "--quiet", "-m",
             update.get("commit-message") or title, env=environment)
         git(checkout, "push", f"--force-with-lease=refs/heads/{update_branch}:{previous_sha or ''}",
             "origin", f"HEAD:refs/heads/{update_branch}", env=environment)
+
     payload = {"title": title, "description": description}
     if opened:
         result = client.request(f"{client.repo_path}/pullrequests/{opened[0]['id']}",
@@ -321,6 +341,7 @@ def main(argv=None):
     parser.add_argument("--reviewer", action="append", help="Reviewer UUID; repeatable")
     parser.add_argument("--dry-run", action="store_true")
     arguments = parser.parse_args(argv)
+
     if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]*", arguments.group):
         parser.error("group must contain only letters, digits, underscores and hyphens")
     if not arguments.directory.startswith("/") or ".." in PurePosixPath(arguments.directory).parts:
@@ -331,14 +352,17 @@ def main(argv=None):
         parser.error("unsupported base branch")
     subprocess.run(["git", "check-ref-format", "--branch", arguments.base_branch],
                    check=True, capture_output=True)
+
     dry_run = os.environ.get("DEPENDABOT_DRY_RUN", "false")
     if dry_run not in ("true", "false"):
         parser.error("DEPENDABOT_DRY_RUN must be true or false")
+
     signal.signal(signal.SIGTERM, terminate)
     client = Bitbucket(arguments.base_branch, arguments.reviewer)
     base_sha = client.branch(client.base_branch)
     if not base_sha:
         raise RuntimeError("Base branch does not exist")
+
     configuration = vars(arguments)
     with tempfile.TemporaryDirectory(prefix="dependabot-") as temporary:
         directory = Path(temporary)

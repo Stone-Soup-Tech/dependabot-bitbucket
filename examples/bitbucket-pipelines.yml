@@ -12,6 +12,7 @@ pipelines:
           - name: DEPENDABOT_DRY_RUN
             default: 'false'
             allowed-values: ['false', 'true']
+
       - parallel:
           fail-fast: false
           steps:
@@ -34,6 +35,7 @@ pipelines:
                 concurrency-group: dependabot-pub
                 script:
                   - dependabot-bitbucket --manager pub --directory / --group flutter --base-branch main
+
       - step:
           name: Update Bitbucket pipeline dependencies
           image: renovate/renovate:44.151.2

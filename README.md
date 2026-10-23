@@ -12,7 +12,7 @@ script:
   - dependabot-bitbucket --manager gradle --directory /android --group android --base-branch dev
 ```
 
-Use the complete [parallel pipeline example](examples/bitbucket-pipelines.yml), which includes the required Docker service, Runtime v3, independent concurrency groups, dry-run control and Renovate pipeline-image updates. It configures `size: 1x`, `max-time: 60`, `fail-fast: false` and a Docker service with 3072 MB. Merge its sections into your pipeline rather than replacing unrelated steps.
+Use the complete [parallel pipeline example](examples/bitbucket-pipelines.yml), which includes the required Docker service, Runtime v3, independent concurrency groups, dry-run control and Renovate pipeline-image updates. It configures `size: 1x`, `max-time: 30`, `fail-fast: false` and a Docker service with 3072 MB. Merge its sections into your pipeline rather than replacing unrelated steps.
 
 ## Credentials and setup
 
@@ -20,9 +20,9 @@ Keep credentials in secured Bitbucket repository/workspace variables:
 
 | Variable | Purpose |
 | --- | --- |
-| `RENOVATE_USERNAME` | Atlassian account **email** for Bitbucket REST Basic authentication. |
-| `RENOVATE_API_TOKEN` | Account API token for REST requests and Git publishing. |
-| `DEPENDABOT_READ_TOKEN` | Optional separate read-only Git token used by the updater credential proxy; defaults to `RENOVATE_API_TOKEN`. |
+| `BOT_USERNAME` | Atlassian account **email** for Bitbucket REST Basic authentication. |
+| `BOT_API_TOKEN` | Account API token for REST requests and Git publishing. |
+| `DEPENDABOT_READ_TOKEN` | Optional separate read-only Git token used by the updater credential proxy; defaults to `BOT_API_TOKEN`. |
 | `DEPENDABOT_READ_USERNAME` | Optional Git identity for the read token; defaults to `x-bitbucket-api-token-auth`. Use that literal or the exact Bitbucket username for API-token Git authentication, **not the REST email**. |
 
 The publishing account needs repository read/write, pull request read/write and user read permissions, plus permission to push `dependabot/*`. Updater read credentials need access to the source repository. Git uses `x-bitbucket-api-token-auth` with the publishing token; the REST client uses the email. These are separate authentication paths even when they share a token.
@@ -80,11 +80,12 @@ For rollback, change the consumer image to a previously validated immutable vers
 
 The daily `check_dependabot_versions.yml` checks **Dependabot CLI releases**, not Renovate. It verifies the latest stable Linux AMD64 archive against the upstream asset digest, updates both version and checksum, increments the runner patch version, tests/builds, and opens an update PR. The normal publishing workflow runs after merge. Breaking runner changes require a manual major-version bump; upstream CLI changes should still be reviewed for compatibility.
 
-For unattended updates:
+For scheduled update PRs:
 
-- Install a GitHub App on this repository with Contents and Pull requests read/write permissions. Configure Actions variable `UPDATE_APP_ID` and secret `UPDATE_APP_PRIVATE_KEY`. App tokens allow bot PRs to trigger normal required workflows, unlike ordinary `GITHUB_TOKEN` PR creation.
-- Protect `main` and require the `validate` check. Enable repository auto-merge and squash merging, then set Actions variable `UPDATE_AUTO_MERGE=true` to request auto-merge after required checks. Required human reviews must be satisfied according to your rules; the workflow does not bypass them.
-- Give the publishing workflow package write access and make the resulting GHCR package public if consumers should pull anonymously. Enable Actions and scheduled workflows. Without App configuration the daily workflow fails visibly; manual updates remain available.
+- The workflow uses the built-in `GITHUB_TOKEN`; no GitHub App, App ID or private key is required. In **Settings → Actions → General → Workflow permissions**, enable **Allow GitHub Actions to create and approve pull requests**. Organization policy must permit it.
+- Update PRs request review from `mihaiborcansst`. Tests and the image build run before PR creation. PR workflows created through `GITHUB_TOKEN` may require a maintainer to select **Approve workflows to run**. Review the PR and successful checks before merging; the active workflow does not enable auto-merge.
+- Protect `main` and require the `validate` check. Give the publishing workflow package write access and make the GHCR package public if consumers should pull anonymously. Enable Actions and scheduled workflows.
+- The previous GitHub App-based workflow is retained as comments at the end of `check_dependabot_versions.yml` for reference only.
 
 For a manual update, run `python3 scripts/cli_release.py --update`, review `versions.yml`, run tests and build the image, then submit a PR. To verify the current pin without changing it, run `python3 scripts/cli_release.py`.
 
