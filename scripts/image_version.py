@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 import re
+import sys
 
 
 def increase_version(version, increase_type, auto_increase=True):
@@ -33,11 +34,14 @@ def main():
     parser.add_argument("--file", type=Path, default=Path("versions.yml"))
     args = parser.parse_args()
     pin = json.loads(args.file.read_text())
-    version = increase_version(pin["image_version"], args.increase_type,
+    current_version = pin["image_version"]
+    version = increase_version(current_version, args.increase_type,
                                auto_increase=args.auto_increase == "true")
     if version != pin["image_version"]:
         pin["image_version"] = version
         args.file.write_text(json.dumps(pin, indent=2) + "\n")
+    print(f"Current version: {current_version}", file=sys.stderr)
+    print(f"New version: {version}", file=sys.stderr)
     print(version)
 
 

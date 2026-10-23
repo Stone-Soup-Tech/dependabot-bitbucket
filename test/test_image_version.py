@@ -33,10 +33,11 @@ class ImageVersionTests(unittest.TestCase):
             path = Path(temporary) / "versions.yml"
             for enabled, expected in (("true", "2.0.0"), ("false", "1.9.10")):
                 path.write_text('{"image_version":"1.9.9"}')
-                result = subprocess.check_output([
+                result = subprocess.run([
                     sys.executable, "-B", str(script), "patch", "--auto-increase", enabled,
-                    "--file", str(path)], text=True)
-                self.assertEqual(result.strip(), expected)
+                    "--file", str(path)], text=True, capture_output=True, check=True)
+                self.assertEqual(result.stdout.strip(), expected)
+                self.assertEqual(result.stderr, f"Current version: 1.9.9\nNew version: {expected}\n")
                 self.assertEqual(json.loads(path.read_text())["image_version"], expected)
 
     def test_invalid_versions_and_increments(self):
