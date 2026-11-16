@@ -1,3 +1,5 @@
+# This repository is archived and should no longer be used. Instead, please use https://github.com/Stone-Soup-Tech/docker-images-flutter-bot for automatic updates to flutter dependencies and Renovate CLI (https://github.com/renovatebot/renovate) for Android and Bitbucket pipelines packages.
+
 # Docker image for Dependabot on Bitbucket
 
 [![Publish Dependabot image](https://github.com/Stone-Soup-Tech/dependabot-bitbucket/actions/workflows/publish.yml/badge.svg)](https://github.com/Stone-Soup-Tech/dependabot-bitbucket/actions/workflows/publish.yml) [![GHCR version](https://ghcr-badge.egpl.dev/Stone-Soup-Tech/dependabot-bitbucket/latest_tag?trim=major&label=latest)](https://ghcr.io/stone-soup-tech/dependabot-bitbucket)
